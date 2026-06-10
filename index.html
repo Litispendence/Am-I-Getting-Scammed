@@ -14,6 +14,10 @@
       box-sizing: border-box;
     }
 
+    html {
+      scroll-behavior: smooth;
+    }
+
     body {
       margin: 0;
       background: #ffffff;
@@ -25,15 +29,22 @@
 
     .page {
       max-width: 760px;
+      min-height: 100vh;
       margin: 0 auto;
-      padding: 56px 20px;
+      padding: 32px 20px 56px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    main {
+      flex: 1;
     }
 
     h1 {
       font-size: 40px;
       line-height: 1.2;
       font-weight: 400;
-      margin: 0 0 20px;
+      margin: 0 0 24px;
     }
 
     p {
@@ -129,8 +140,8 @@
     }
 
     footer {
-      margin-top: 56px;
-      padding-top: 20px;
+      margin-top: 80px;
+      padding-top: 24px;
       border-top: 1px solid #000000;
       font-size: 14px;
     }
@@ -141,7 +152,7 @@
       }
 
       .page {
-        padding: 40px 16px;
+        padding: 24px 16px 48px;
       }
 
       h1 {
@@ -156,8 +167,9 @@
 </head>
 
 <body>
-  <main class="page">
-    <h1>Am I Getting Scammed?</h1>
+  <div class="page">
+    <main>
+      <h1>Am I Getting Scammed?</h1>
 
     <p>
       Paste a link. This tool checks for basic scam warning signs without opening the website.
@@ -192,10 +204,12 @@
       </div>
     </section>
 
+    </main>
+
     <footer>
       © 2026 Litispendence
     </footer>
-  </main>
+  </div>
 
   <script>
     const urlInput = document.getElementById("urlInput");
