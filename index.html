@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="A small local URL safety checker for spotting suspicious links." />
+
+  <title>Am I Getting Scammed?</title>
+
+  <style>
+    @import url("https://cdn.jsdelivr.net/npm/@fontsource/commit-mono@5.2.5/index.css");
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: #000000;
+      font-family: "Commit Mono", monospace;
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .page {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 56px 20px;
+    }
+
+    h1 {
+      font-size: 40px;
+      line-height: 1.2;
+      font-weight: 400;
+      margin: 0 0 20px;
+    }
+
+    p {
+      margin: 0 0 20px;
+    }
+
+    .tool {
+      border: 1px solid #000000;
+      padding: 20px;
+      margin-top: 32px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    input,
+    button {
+      width: 100%;
+      border: 1px solid #000000;
+      background: #ffffff;
+      color: #000000;
+      font-family: "Commit Mono", monospace;
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    input {
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    input:focus,
+    button:focus {
+      outline: 2px solid #000000;
+      outline-offset: 2px;
+    }
+
+    button {
+      padding: 12px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #000000;
+      color: #ffffff;
+    }
+
+    .result {
+      display: none;
+      border-top: 1px solid #000000;
+      margin-top: 20px;
+      padding-top: 20px;
+    }
+
+    .result.visible {
+      display: block;
+    }
+
+    .verdict {
+      font-size: 24px;
+      line-height: 1.3;
+      margin-bottom: 8px;
+    }
+
+    .meter {
+      border: 1px solid #000000;
+      height: 18px;
+      margin: 16px 0 20px;
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0%;
+      background: #000000;
+      transition: width 160ms ease-in-out;
+    }
+
+    .signals {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .signals li {
+      margin-bottom: 8px;
+    }
+
+    .note {
+      font-size: 14px;
+      margin-top: 20px;
+    }
+
+    footer {
+      margin-top: 56px;
+      padding-top: 20px;
+      border-top: 1px solid #000000;
+      font-size: 14px;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        font-size: 15px;
+      }
+
+      .page {
+        padding: 40px 16px;
+      }
+
+      h1 {
+        font-size: 32px;
+      }
+
+      .tool {
+        padding: 16px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <h1>Am I Getting Scammed?</h1>
+
+    <p>
+      Paste a link. This tool checks for basic scam warning signs without opening the website.
+    </p>
+
+    <section class="tool" aria-label="URL safety checker">
+      <label for="urlInput">Website link</label>
+      <input
+        id="urlInput"
+        type="text"
+        inputmode="url"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="https://example.com"
+      />
+
+      <button id="checkButton" type="button">Check link</button>
+
+      <div id="result" class="result" aria-live="polite">
+        <div id="verdict" class="verdict"></div>
+        <p id="summary"></p>
+
+        <div class="meter" aria-hidden="true">
+          <div id="meterFill" class="meter-fill"></div>
+        </div>
+
+        <ul id="signals" class="signals"></ul>
+
+        <p class="note">
+          Never enter passwords, card details, or recovery codes unless you are sure the site is real.
+        </p>
+      </div>
+    </section>
+
+    <footer>
+      © 2026 Litispendence
+    </footer>
+  </main>
+
+  <script>
+    const urlInput = document.getElementById("urlInput");
+    const checkButton = document.getElementById("checkButton");
+    const result = document.getElementById("result");
+    const verdict = document.getElementById("verdict");
+    const summary = document.getElementById("summary");
+    const meterFill = document.getElementById("meterFill");
+    const signals = document.getElementById("signals");
+
+    const suspiciousWords = [
+      "verify", "login", "signin", "secure", "account", "password", "bank",
+      "wallet", "gift", "free", "prize", "urgent", "reset", "delivery"
+    ];
+
+    const shorteners = [
+      "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "is.gd", "cutt.ly", "shorturl.at"
+    ];
+
+    const riskyTlds = ["zip", "mov", "click", "tk", "ml", "cf", "top", "work"];
+
+    function normalize(value) {
+      const trimmed = value.trim();
+      if (!trimmed) return "";
+      if (/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(trimmed)) return trimmed;
+      return "https://" + trimmed;
+    }
+
+    function getMainDomain(hostname) {
+      const parts = hostname.replace(/^www\./, "").split(".").filter(Boolean);
+      return parts.length <= 2 ? parts.join(".") : parts.slice(-2).join(".");
+    }
+
+    function isIp(hostname) {
+      return /^(\d{1,3}\.){3}\d{1,3}$/.test(hostname) || /^\[[0-9a-f:]+\]$/i.test(hostname);
+    }
+
+    function add(items, text, points) {
+      items.push({ text, points });
+    }
+
+    function checkLink(value) {
+      const normalized = normalize(value);
+      const items = [];
+      let score = 0;
+
+      if (!normalized) {
+        return { ok: false, message: "Paste a link first." };
+      }
+
+      let parsed;
+      try {
+        parsed = new URL(normalized);
+      } catch {
+        return { ok: false, message: "That does not look like a valid website link." };
+      }
+
+      const full = parsed.href;
+      const hostname = parsed.hostname.toLowerCase();
+      const mainDomain = getMainDomain(hostname);
+      const domainName = mainDomain.split(".")[0] || "";
+      const tld = mainDomain.split(".").pop() || "";
+      const hostParts = hostname.replace(/^www\./, "").split(".").filter(Boolean);
+      const lower = full.toLowerCase();
+
+      if (parsed.protocol === "http:") {
+        score += 25;
+        add(items, "Uses http instead of https", 25);
+      }
+
+      if (full.length > 120) {
+        score += 20;
+        add(items, "The link is very long", 20);
+      }
+
+      if (full.includes("@")) {
+        score += 25;
+        add(items, "Contains an @ sign", 25);
+      }
+
+      if (isIp(hostname)) {
+        score += 30;
+        add(items, "Uses an IP address instead of a normal domain", 30);
+      }
+
+      if (hostParts.length >= 4) {
+        score += 15;
+        add(items, "Has many subdomains. Real domain: " + mainDomain, 15);
+      }
+
+      if (/[a-z]/i.test(domainName) && /\d/.test(domainName)) {
+        score += 20;
+        add(items, "Domain mixes letters and numbers", 20);
+      }
+
+      if (hostname.includes("xn--")) {
+        score += 25;
+        add(items, "Uses encoded domain characters", 25);
+      }
+
+      if (shorteners.includes(hostname.replace(/^www\./, ""))) {
+        score += 20;
+        add(items, "Shortened link hides the final destination", 20);
+      }
+
+      if (riskyTlds.includes(tld)) {
+        score += 10;
+        add(items, "Uses a risky or unusual domain ending", 10);
+      }
+
+      const wordHits = suspiciousWords.filter((word) => lower.includes(word));
+      if (wordHits.length >= 2) {
+        score += 15;
+        add(items, "Contains sensitive words: " + wordHits.slice(0, 4).join(", "), 15);
+      }
+
+      score = Math.min(score, 100);
+
+      if (items.length === 0) {
+        add(items, "No obvious red flags found", 0);
+      }
+
+      let label = "Looks low risk";
+      let text = "No obvious scam pattern was found. Still check who sent it.";
+
+      if (score >= 70) {
+        label = "High risk";
+        text = "This link has several warning signs. Do not enter personal information.";
+      } else if (score >= 40) {
+        label = "Suspicious";
+        text = "This link needs caution. Check the real domain before opening it.";
+      } else if (score >= 15) {
+        label = "Use caution";
+        text = "This link has a few things worth checking.";
+      }
+
+      return { ok: true, score, label, text, items };
+    }
+
+    function render(report) {
+      result.classList.add("visible");
+      signals.innerHTML = "";
+
+      if (!report.ok) {
+        verdict.textContent = "Could not check";
+        summary.textContent = report.message;
+        meterFill.style.width = "0%";
+        return;
+      }
+
+      verdict.textContent = report.label + " — " + report.score + "/100";
+      summary.textContent = report.text;
+      meterFill.style.width = report.score + "%";
+
+      report.items.slice(0, 4).forEach((item) => {
+        const li = document.createElement("li");
+        li.textContent = item.text;
+        signals.appendChild(li);
+      });
+    }
+
+    function runCheck() {
+      render(checkLink(urlInput.value));
+    }
+
+    checkButton.addEventListener("click", runCheck);
+    urlInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") runCheck();
+    });
+  </script>
+</body>
+</html>
